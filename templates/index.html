@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微信公众平台登录辅助工具</title>
+    <style>
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background-color: #f7f7f7;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+        h1 {
+            color: #07C160;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .card {
+            border: 1px solid #e6e6e6;
+            border-radius: 6px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .card-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .qrcode-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            margin: 20px 0;
+        }
+        .qrcode-img {
+            max-width: 240px;
+            border: 1px solid #eee;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .status {
+            background-color: #f8f8f8;
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+        }
+        .status-text {
+            font-weight: bold;
+        }
+        .status-waiting {
+            color: #E6A23C;
+        }
+        .status-success {
+            color: #67C23A;
+        }
+        .status-error {
+            color: #F56C6C;
+        }
+        .button-group {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        button {
+            background-color: #07C160;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #06AD56;
+        }
+        button.secondary {
+            background-color: #909399;
+        }
+        button.secondary:hover {
+            background-color: #808285;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        pre {
+            background-color: #f8f8f8;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 13px;
+            white-space: pre-wrap;
+        }
+        .copy-btn {
+            margin-top: 10px;
+            background-color: #409EFF;
+        }
+        .copy-btn:hover {
+            background-color: #337ECC;
+        }
+        .steps {
+            margin: 20px 0;
+        }
+        .step {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        .step-number {
+            background-color: #07C160;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(7, 193, 96, 0.3);
+            border-radius: 50%;
+            border-top-color: #07C160;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>微信公众平台登录辅助工具</h1>
+        
+        <div class="card">
+            <div class="card-title">登录步骤</div>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div>点击"获取登录二维码"按钮</div>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div>使用微信扫描显示的二维码</div>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div>在微信中确认登录</div>
+                </div>
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <div>登录成功后，自动获取Cookie和Token</div>
+                </div>
+                <div class="step">
+                    <div class="step-number">5</div>
+                    <div>复制获取到的信息，用于您的平台</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">登录操作</div>
+            <div class="button-group">
+                <button id="loginBtn" onclick="startLogin()">获取登录二维码</button>
+                <button id="resetBtn" class="secondary" onclick="resetLogin()" disabled>重置登录</button>
+            </div>
+            
+            <div id="qrcodeContainer" class="qrcode-container" style="display: none;">
+                <p>请使用微信扫描下方二维码</p>
+                <div id="loadingQR" class="loading"></div>
+                <img id="qrcodeImg" class="qrcode-img" style="display: none;" alt="微信登录二维码">
+            </div>
+            
+            <div class="status">
+                当前状态: <span id="statusText" class="status-text status-waiting">未开始</span>
+            </div>
+        </div>
+        
+        <div id="resultCard" class="card" style="display: none;">
+            <div class="card-title">登录凭证</div>
+            <p>已成功获取Cookie和Token，您可以复制下方内容：</p>
+            
+            <div>
+                <strong>Cookies:</strong>
+                <pre id="cookieResult"></pre>
+                <button class="copy-btn" onclick="copyToClipboard('cookieResult')">复制Cookies</button>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <strong>Token:</strong>
+                <pre id="tokenResult"></pre>
+                <button class="copy-btn" onclick="copyToClipboard('tokenResult')">复制Token</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let checkStatusInterval;
+        
+        async function startLogin() {
+            document.getElementById('loginBtn').disabled = true;
+            document.getElementById('qrcodeContainer').style.display = 'flex';
+            document.getElementById('qrcodeImg').style.display = 'none';
+            document.getElementById('loadingQR').style.display = 'block';
+            document.getElementById('statusText').innerText = '正在获取登录二维码...';
+            document.getElementById('statusText').className = 'status-text status-waiting';
+            document.getElementById('resultCard').style.display = 'none';
+            
+            try {
+                const response = await fetch('/login');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // 添加时间戳防止缓存
+                    document.getElementById('qrcodeImg').src = '/static/qrcode.png?t=' + new Date().getTime();
+                    document.getElementById('qrcodeImg').onload = function() {
+                        document.getElementById('loadingQR').style.display = 'none';
+                        document.getElementById('qrcodeImg').style.display = 'block';
+                    };
+                    
+                    document.getElementById('statusText').innerText = '请使用微信扫描二维码';
+                    document.getElementById('resetBtn').disabled = false;
+                    
+                    // 开始轮询检查登录状态
+                    startStatusCheck();
+                } else {
+                    document.getElementById('statusText').innerText = '获取二维码失败: ' + data.message;
+                    document.getElementById('statusText').className = 'status-text status-error';
+                    document.getElementById('loadingQR').style.display = 'none';
+                    document.getElementById('loginBtn').disabled = false;
+                }
+            } catch (error) {
+                document.getElementById('statusText').innerText = '获取二维码失败: ' + error.message;
+                document.getElementById('statusText').className = 'status-text status-error';
+                document.getElementById('loadingQR').style.display = 'none';
+                document.getElementById('loginBtn').disabled = false;
+            }
+        }
+        
+        function startStatusCheck() {
+            // 清除可能存在的旧定时器
+            if (checkStatusInterval) {
+                clearInterval(checkStatusInterval);
+            }
+            
+            // 每2秒检查一次登录状态
+            checkStatusInterval = setInterval(async () => {
+                try {
+                    const response = await fetch('/check_status');
+                    const data = await response.json();
+                    
+                    // 更新状态显示
+                    document.getElementById('statusText').innerText = data.status;
+                    
+                    if (data.status === '已登录') {
+                        document.getElementById('statusText').className = 'status-text status-success';
+                        clearInterval(checkStatusInterval);
+                        fetchCredentials();
+                    } else if (data.status === '登录超时') {
+                        document.getElementById('statusText').className = 'status-text status-error';
+                        clearInterval(checkStatusInterval);
+                        document.getElementById('loginBtn').disabled = false;
+                    } else {
+                        document.getElementById('statusText').className = 'status-text status-waiting';
+                    }
+                } catch (error) {
+                    document.getElementById('statusText').innerText = '检查状态失败: ' + error.message;
+                    document.getElementById('statusText').className = 'status-text status-error';
+                }
+            }, 2000);
+        }
+        
+        async function fetchCredentials() {
+            try {
+                const response = await fetch('/get_credentials');
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // 显示结果
+                    document.getElementById('cookieResult').innerText = JSON.stringify(data.cookies, null, 2);
+                    document.getElementById('tokenResult').innerText = data.token || '未获取到Token';
+                    document.getElementById('resultCard').style.display = 'block';
+                } else {
+                    document.getElementById('statusText').innerText = '获取凭证失败: ' + data.message;
+                    document.getElementById('statusText').className = 'status-text status-error';
+                }
+            } catch (error) {
+                document.getElementById('statusText').innerText = '获取凭证失败: ' + error.message;
+                document.getElementById('statusText').className = 'status-text status-error';
+            }
+        }
+        
+        async function resetLogin() {
+            if (checkStatusInterval) {
+                clearInterval(checkStatusInterval);
+            }
+            
+            try {
+                const response = await fetch('/reset');
+                const data = await response.json();
+                
+                // 重置界面
+                document.getElementById('loginBtn').disabled = false;
+                document.getElementById('resetBtn').disabled = true;
+                document.getElementById('qrcodeContainer').style.display = 'none';
+                document.getElementById('resultCard').style.display = 'none';
+                document.getElementById('statusText').innerText = '未开始';
+                document.getElementById('statusText').className = 'status-text status-waiting';
+            } catch (error) {
+                document.getElementById('statusText').innerText = '重置失败: ' + error.message;
+                document.getElementById('statusText').className = 'status-text status-error';
+            }
+        }
+        
+        function copyToClipboard(elementId) {
+            const text = document.getElementById(elementId).innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('已复制到剪贴板');
+            }).catch(err => {
+                console.error('复制失败:', err);
+                alert('复制失败，请手动选择并复制');
+            });
+        }
+    </script>
+</body>
+</html> 

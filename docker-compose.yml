@@ -1,0 +1,13 @@
+version: '3'
+
+services:
+  wx_login:
+    build: .
+    container_name: wx_login
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./static:/app/static
+    environment:
+      - TZ=Asia/Shanghai 
