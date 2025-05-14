@@ -1,9 +1,10 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 import json
 import time
 import re
@@ -21,11 +22,7 @@ class WeChatTokenExtractor:
         self.cookies = None
     
     def setup_driver(self):
-        """设置启用网络监控的Chrome WebDriver"""
-        # 启用Chrome的性能日志记录
-        capabilities = DesiredCapabilities.CHROME
-        capabilities["goog:loggingPrefs"] = {"performance": "ALL"}
-        
+        """设置启用网络监控的Chrome WebDriver，兼容Selenium 4.x"""
         chrome_options = Options()
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
@@ -33,8 +30,22 @@ class WeChatTokenExtractor:
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--window-size=1920,1080")
         
-        # 创建Chrome WebDriver
-        self.driver = webdriver.Chrome(options=chrome_options, desired_capabilities=capabilities)
+        # 启用性能日志记录（Selenium 4.x兼容方式）
+        chrome_options.set_capability('goog:loggingPrefs', {'performance': 'ALL'})
+        
+        try:
+            # 使用webdriver_manager自动下载和管理ChromeDriver
+            service = Service(ChromeDriverManager().install())
+            self.driver = webdriver.Chrome(service=service, options=chrome_options)
+        except Exception as e:
+            logging.error(f"使用webdriver_manager失败: {e}")
+            # 备选方案：直接使用Chrome
+            try:
+                self.driver = webdriver.Chrome(options=chrome_options)
+            except Exception as e2:
+                logging.error(f"直接使用Chrome失败: {e2}")
+                raise
+                
         logging.info("WebDriver已初始化")
     
     def start_login(self):
@@ -98,38 +109,41 @@ class WeChatTokenExtractor:
     
     def extract_token_from_logs(self):
         """从浏览器性能日志中提取token"""
-        logs = self.driver.get_log("performance")
-        
-        for log_entry in logs:
-            try:
-                log_data = json.loads(log_entry["message"])["message"]
-                if "Network.responseReceived" in log_data["method"]:
-                    response_url = log_data["params"]["response"]["url"]
-                    
-                    # 查找可能包含token的请求
-                    if "token=" in response_url:
-                        token_match = re.search(r"token=([^&]+)", response_url)
-                        if token_match:
-                            self.token = token_match.group(1)
-                            logging.info(f"从网络日志中找到token: {self.token}")
-                            return
-                    
-                    # 尝试查找包含token的其他API请求
-                    if "cgi-bin" in response_url and "lang=zh_CN" in response_url:
-                        request_id = log_data["params"]["requestId"]
-                        try:
-                            # 获取响应体
-                            response_body = self.driver.execute_cdp_cmd("Network.getResponseBody", {"requestId": request_id})
-                            if "token" in response_body.get("body", ""):
-                                token_match = re.search(r'"token"\s*:\s*"([^"]+)"', response_body["body"])
-                                if token_match:
-                                    self.token = token_match.group(1)
-                                    logging.info(f"从响应体中找到token: {self.token}")
-                                    return
-                        except Exception as e:
-                            pass  # 忽略无法获取的响应体
-            except Exception as e:
-                pass  # 忽略解析错误
+        try:
+            logs = self.driver.get_log("performance")
+            
+            for log_entry in logs:
+                try:
+                    log_data = json.loads(log_entry["message"])["message"]
+                    if "Network.responseReceived" in log_data["method"]:
+                        response_url = log_data["params"]["response"]["url"]
+                        
+                        # 查找可能包含token的请求
+                        if "token=" in response_url:
+                            token_match = re.search(r"token=([^&]+)", response_url)
+                            if token_match:
+                                self.token = token_match.group(1)
+                                logging.info(f"从网络日志中找到token: {self.token}")
+                                return
+                        
+                        # 尝试查找包含token的其他API请求
+                        if "cgi-bin" in response_url and "lang=zh_CN" in response_url:
+                            request_id = log_data["params"]["requestId"]
+                            try:
+                                # 获取响应体
+                                response_body = self.driver.execute_cdp_cmd("Network.getResponseBody", {"requestId": request_id})
+                                if "token" in response_body.get("body", ""):
+                                    token_match = re.search(r'"token"\s*:\s*"([^"]+)"', response_body["body"])
+                                    if token_match:
+                                        self.token = token_match.group(1)
+                                        logging.info(f"从响应体中找到token: {self.token}")
+                                        return
+                            except Exception as e:
+                                pass  # 忽略无法获取的响应体
+                except Exception as e:
+                    pass  # 忽略解析错误
+        except Exception as e:
+            logging.error(f"获取性能日志失败: {e}")
     
     def extract_token_from_page(self):
         """从页面内容中提取token"""
